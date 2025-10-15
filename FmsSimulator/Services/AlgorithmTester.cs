@@ -5,11 +5,11 @@ namespace FmsSimulator.Services;
 
 public class AlgorithmTester
 {
-    private readonly PlanGenerator _planGenerator;
-    private readonly SimpleMcdmEngine _mcdmEngine;
+    private readonly IPlanGenerator _planGenerator;
+    private readonly IMcdmEngine _mcdmEngine;
     private readonly ILogger<AlgorithmTester> _logger;
 
-    public AlgorithmTester(PlanGenerator planGenerator, SimpleMcdmEngine mcdmEngine, ILogger<AlgorithmTester> logger)
+    public AlgorithmTester(IPlanGenerator planGenerator, IMcdmEngine mcdmEngine, ILogger<AlgorithmTester> logger)
     {
         _planGenerator = planGenerator;
         _mcdmEngine = mcdmEngine;
