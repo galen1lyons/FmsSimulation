@@ -4,11 +4,12 @@ using FmsSimulator.Services;
 // --- 1. SETUP ---
 var planGenerator = new PlanGenerator();
 var mcdmEngine = new SimpleMcdmEngine();
-var dispatcher = new DispatcherService(); // NEW: Create an instance of our dispatcher.
+var dispatcher = new DispatcherService();
 var learningService = new LearningService();
+var erpConnector = new ErpConnectorService();
 
-Console.WriteLine("--- FMS Simulation Initialized (Full Upgrade) ---");
-Console.WriteLine("--------------------------------------------------");
+Console.WriteLine("--- FMS Simulation Initialized (Full Architecture) ---");
+Console.WriteLine("----------------------------------------------------");
 
 // --- 2. SIMULATE WORLD STATE ---
 var amrFleet = new List<AmrState>
@@ -18,12 +19,11 @@ var amrFleet = new List<AmrState>
     new() { Id = "Leviticus-01", ModelName = "Genesis", PrimaryMission = "Pallet & Rack Transport", TopModuleType = "Electric AGV Lift", MaxPayloadKg = 1500, LiftingHeightMm = 510, IsAvailable = true, CurrentPosition = (50, 75), BatteryLevel = 0.95 }
 };
 
-// --- 3. CREATE A QUEUE OF TASKS ---
-var taskQueue = new Queue<ProductionTask>();
-taskQueue.Enqueue(new ProductionTask { TaskId = "T-205", RequiredPayload = 1200, RequiredModule = "Electric AGV Lift", RequiredLiftHeight = 500, ToLocation = "Assembly B" });
-taskQueue.Enqueue(new ProductionTask { TaskId = "T-206", RequiredPayload = 50, RequiredModule = "6-Axis Robotic Arm", ToLocation = "QC Station" });
-taskQueue.Enqueue(new ProductionTask { TaskId = "T-207", RequiredPayload = 900, RequiredModule = "Electric AGV Lift", RequiredLiftHeight = 200, ToLocation = "Warehouse Rack 12" });
-taskQueue.Enqueue(new ProductionTask { TaskId = "T-208", RequiredPayload = 1300, RequiredModule = "Electric AGV Lift", RequiredLiftHeight = 400, ToLocation = "Shipping Dock" });
+// NEW: Create a "brain" or internal controller for each AMR in our fleet.
+var amrControllers = amrFleet.ToDictionary(amr => amr.Id, amr => new AmrInternalController(amr.Id));
+
+// --- 3. VERTICAL COMMUNICATION (ISA-95) ---
+var taskQueue = erpConnector.FetchAndTranslateOrders();
 
 // --- 4. MAIN SIMULATION LOOP ---
 int taskNumber = 1;
@@ -38,15 +38,18 @@ while (taskQueue.Count > 0)
     if (bestPlan != null)
     {
         bestPlan.AssignedAmr.IsAvailable = false;
+        
+        // --- HORIZONTAL COMMUNICATION (VDA 5050) ---
         await dispatcher.DispatchOrderAsync(bestPlan);
 
-        // --- NEW: The "CHECK" and "ACT" steps ---
-        // Simulate the "actual" time it took, adding a random delay.
-        // CHANGE THIS LINE to guarantee a big delay for the demonstration.
-        double actualTime = bestPlan.PredictedTimeToComplete + new Random().Next(5, 10);
-        Console.WriteLine($"   [Feedback]: Task complete. Predicted time: {bestPlan.PredictedTimeToComplete:F2}, Actual time: {actualTime:F2}");
+        // --- NEW: INTERNAL COMMUNICATION (Internal MQTT) ---
+        // Get the internal controller for the winning AMR and tell it to process the order.
+        var targetController = amrControllers[bestPlan.AssignedAmr.Id];
+        await targetController.ProcessVda5050Order(bestPlan.Task);
 
-        // Use the Learning Service to update our world model based on the result.
+        // --- LEARNING FEEDBACK LOOP ---
+        double actualTime = bestPlan.PredictedTimeToComplete + new Random().Next(5, 10); 
+        Console.WriteLine($"   [Feedback]: Task complete. Predicted time: {bestPlan.PredictedTimeToComplete:F2}, Actual time: {actualTime:F2}");
         learningService.UpdateWorldModel(bestPlan, actualTime, planGenerator);
     }
     else
