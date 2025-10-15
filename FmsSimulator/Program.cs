@@ -5,6 +5,7 @@ using FmsSimulator.Services;
 var planGenerator = new PlanGenerator();
 var mcdmEngine = new SimpleMcdmEngine();
 var dispatcher = new DispatcherService(); // NEW: Create an instance of our dispatcher.
+var learningService = new LearningService();
 
 Console.WriteLine("--- FMS Simulation Initialized (Full Upgrade) ---");
 Console.WriteLine("--------------------------------------------------");
@@ -37,9 +38,16 @@ while (taskQueue.Count > 0)
     if (bestPlan != null)
     {
         bestPlan.AssignedAmr.IsAvailable = false;
-        // NEW: Call the dispatcher service to handle communication.
-        // The 'await' keyword tells the program to wait for the simulated network call to finish.
-        await dispatcher.DispatchOrderAsync(bestPlan); 
+        await dispatcher.DispatchOrderAsync(bestPlan);
+
+        // --- NEW: The "CHECK" and "ACT" steps ---
+        // Simulate the "actual" time it took, adding a random delay.
+        // CHANGE THIS LINE to guarantee a big delay for the demonstration.
+        double actualTime = bestPlan.PredictedTimeToComplete + new Random().Next(5, 10);
+        Console.WriteLine($"   [Feedback]: Task complete. Predicted time: {bestPlan.PredictedTimeToComplete:F2}, Actual time: {actualTime:F2}");
+
+        // Use the Learning Service to update our world model based on the result.
+        learningService.UpdateWorldModel(bestPlan, actualTime, planGenerator);
     }
     else
     {

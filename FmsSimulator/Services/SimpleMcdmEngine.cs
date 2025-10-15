@@ -29,8 +29,8 @@ public class SimpleMcdmEngine
             // --- Scoring Logic ---
 
             // 1. Calculate Time Score (same as before).
-            double distance = CalculateDistance(plan.AssignedAmr.CurrentPosition, (5,5));
-            double timeScore = 1.0 / distance;
+            plan.PredictedTimeToComplete = CalculateDistance(plan.AssignedAmr.CurrentPosition, (5,5));
+            double timeScore = 1.0 / plan.PredictedTimeToComplete;
 
             // 2. Calculate Suitability Score (same as before).
             double suitabilityScore = 1 - (plan.Task.RequiredPayload / plan.AssignedAmr.MaxPayloadKg);

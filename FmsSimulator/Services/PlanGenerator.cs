@@ -4,6 +4,7 @@ namespace FmsSimulator.Services;
 
 public class PlanGenerator
 {
+    private readonly Dictionary<string, double> _humanTrafficCost = new();
     // This method finds all suitable AMRs for a given task.
     public List<AssignmentPlan> GeneratePlans(ProductionTask task, List<AmrState> fleet)
     {
@@ -35,5 +36,19 @@ public class PlanGenerator
         }
 
         return plans;
+    }
+
+    public void UpdateTrafficCost(string zone, double increase)
+    {
+        if (_humanTrafficCost.ContainsKey(zone))
+        {
+            _humanTrafficCost[zone] += increase;
+            Console.WriteLine($"   [Learning Service]: Traffic cost for {zone} increased to {_humanTrafficCost[zone]:F2}.");
+        }
+        else
+        {
+            _humanTrafficCost[zone] = 1.0 + increase;
+            Console.WriteLine($"   [Learning Service]: New traffic zone {zone} logged with cost { _humanTrafficCost[zone]:F2}.");
+        }
     }
 }
