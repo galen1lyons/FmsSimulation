@@ -1,24 +1,34 @@
 using FmsSimulator.Models;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace FmsSimulator.Services;
 
 public class ErpConnectorService
 {
-    // In a real system, this would be a database lookup.
-    // Here, we simulate a product database to find handling requirements.
-    private readonly Dictionary<string, (double weight, string module, double liftHeight)> _skuDatabase = new()
+    private readonly ILogger<ErpConnectorService> _logger;
+    private readonly Dictionary<string, (double weight, string module, double liftHeight)> _skuDatabase;
+
+    public ErpConnectorService(ILogger<ErpConnectorService> logger, IConfiguration configuration)
     {
-        { "HEAVY-PALLET-A", (1200, "Electric AGV Lift", 500) },
-        { "SMALL-COMPONENT-B", (50, "6-Axis Robotic Arm", 0) },
-        { "MEDIUM-PALLET-C", (900, "Electric AGV Lift", 200) },
-        { "HEAVY-PALLET-D", (1300, "Electric AGV Lift", 400) }
-    };
+        _logger = logger;
+        _skuDatabase = configuration.GetSection("FmsSettings:SkuDatabase")
+            .GetChildren()
+            .ToDictionary(
+                x => x.Key,
+                x => (
+                    x.GetValue<double>("Weight"),
+                    x.GetValue<string>("Module") ?? "",
+                    x.GetValue<double>("LiftHeight")
+                )
+            );
+    }
 
     // This method simulates fetching orders from the ERP and translating them.
     public Queue<ProductionTask> FetchAndTranslateOrders()
     {
-        Console.WriteLine("[ERP Connector]: Fetching new production orders...");
-        
+        _logger.LogInformation("[ERP Connector]: Fetching new production orders...");
+
         // 1. Simulate fetching a list of high-level orders.
         var erpOrders = new List<ProductionOrder>
         {
@@ -45,10 +55,10 @@ public class ErpConnectorService
                     RequiredLiftHeight = details.liftHeight
                 };
                 fmsTaskQueue.Enqueue(newTask);
-                Console.WriteLine($"[ERP Connector]: Order {order.OrderId} translated to FMS task.");
+                _logger.LogInformation("[ERP Connector]: Order {OrderId} translated to FMS task.", order.OrderId);
             }
         }
-        
+
         return fmsTaskQueue;
     }
 }
