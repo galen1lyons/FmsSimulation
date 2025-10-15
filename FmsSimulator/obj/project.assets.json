@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\dedmti.intern\\FmsSimulation\\FmsSimulator\\FmsSimulator.csproj",
+      "projectUniqueName": "c:\\Users\\dedmti.intern\\FmsSimulation\\FmsSimulator\\FmsSimulator.csproj",
       "projectName": "FmsSimulator",
-      "projectPath": "C:\\Users\\dedmti.intern\\FmsSimulation\\FmsSimulator\\FmsSimulator.csproj",
+      "projectPath": "c:\\Users\\dedmti.intern\\FmsSimulation\\FmsSimulator\\FmsSimulator.csproj",
       "packagesPath": "C:\\Users\\dedmti.intern\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\dedmti.intern\\FmsSimulation\\FmsSimulator\\obj\\",
+      "outputPath": "c:\\Users\\dedmti.intern\\FmsSimulation\\FmsSimulator\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\dedmti.intern\\AppData\\Roaming\\NuGet\\NuGet.Config"
