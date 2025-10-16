@@ -1,82 +1,68 @@
-# System Architecture (High Level)# System architecture (high level)
+# System Architecture (High Level)
 
+This diagram shows the main components, tri-planar communication flow, and brain-inspired cognitive layers.
 
-
-This diagram shows the main components and tri-planar communication flow used in the simulation.This diagram shows the main components and data flow used in the simulation.
-
-
-
-```mermaid```mermaid
-
-graph TDgraph TD
-
-        subgraph "Vertical Plane (ISA-95 ERP Integration)"        subgraph "Vertical Plane (ISA-95)"
-
-                A[ERP Production Order] --> B(ErpConnectorService)                A[ERP issues Production Order] --> B(ErpConnectorService)
-
-                B -- "Translates to ProductionTask" --> WM[WorkflowManager]        end
-
-        end    
-
-            subgraph "FMS Core"
-
-        subgraph "FMS Core - Conscious Layer"                B -- "Translates Order to Task" --> C[FMS Task Queue]
-
-                WM -- "Phase 1: Plan Generation" --> D(OptimizedPlanGenerator)                C --> D(PlanGenerator)
-
-                D -- "Valid Plans" --> E(OptimizedMcdmEngine)                D -- "Generates Valid Plans" --> E(SimpleMcdmEngine)
-
-                E -- "Phase 2: Decision Making<br/>MCDM Scoring" --> WM                E -- "Selects Best Plan" --> F(DispatcherService)
-
-                        
-
-                WM -- "Phase 3: Execution" --> F(CommunicationService)                %% --- Sequential flow for feedback ---
-
-                F -- "VDA 5050 Orders" --> G[Task Execution]                G[Task Execution & Feedback] --> H(LearningService)
-
-                                H -- "Updates Traffic Model" --> D
-
-                G -- "Phase 4: Learning" --> H(LearningService)        end
-
-                H -- "Updates World Model<br/>Traffic Costs" --> D
-
-                        subgraph "Horizontal & Internal Planes (AMR Fleet)"
-
-                WM -.State Tracking.-> DB[(WorkflowState<br/>Metrics)]                 F -- "Dispatches VDA 5050 Order" --> I(AmrInternalController)
-
-        end                 I -- "Executes Internal Commands" --> G
-
+```mermaid
+graph TD
+    subgraph "Vertical Plane - ISA-95 ERP Integration"
+        A[ERP Production Order] --> B(ErpConnectorService)
+        B -- "Translates to ProductionTask" --> WM[WorkflowManager]
+    end
+    
+    subgraph "FMS Core - Brain Layers"
+        WM -- "Phase 1: Plan Generation" --> D(OptimizedPlanGenerator)
+        D -- "Candidate Plans" --> E(OptimizedMcdmEngine)
+        
+        subgraph "Subconscious Layer - Fast Processing"
+            D
+            F(CommunicationService)
         end
+        
+        subgraph "Conscious Layer - Deliberate Decisions"
+            E -- "Phase 2: MCDM Scoring<br/>Multi-Criteria Analysis" --> WM
+        end
+        
+        subgraph "Learning Layer - Adaptive Memory"
+            H(LearningService)
+            H -- "Updates World Model<br/>Traffic Costs" --> D
+        end
+        
+        WM -- "Phase 3: Execution" --> F
+        F -- "VDA 5050 Orders" --> G[Task Execution]
+        G -- "Phase 4: Learning" --> H
+        
+        WM -.State Tracking.-> DB[(WorkflowState<br/>Metrics)]
+    end
+    
+    subgraph "Horizontal & Internal Planes - AMR Fleet"
+        F -- "Publishes VDA 5050" --> I(InternalAmrController)
+        I -- "Navigation/Lift/Arm Commands" --> G
+        G -- "Telemetry & Feedback" --> WM
+    end
+    
+    %% Styling
+    classDef service fill:#e1f5ff,stroke:#0066cc,stroke-width:2px
+    classDef conscious fill:#fff4e6,stroke:#ff9800,stroke-width:3px
+    classDef subconscious fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    classDef learning fill:#f3e5f5,stroke:#9c27b0,stroke-width:3px
+    classDef data fill:#fce4ec,stroke:#e91e63,stroke-width:2px
+    
+    class B,I service
+    class E conscious
+    class D,F subconscious
+    class H learning
+    class DB data
+```
 
-        subgraph "Horizontal & Internal Planes (AMR Fleet)"
+## Key Components
 
-                F -- "Publishes VDA 5050" --> I(InternalAmrController)        %% --- Styling ---
-
-                I -- "Navigation/Lift/Arm Commands" --> G        classDef service fill:#f9f,stroke:#333,stroke-width:2px;
-
-                G -- "Telemetry & Feedback" --> WM        class B,D,E,F,H,I service;
-
-        end```
-
-
-
-        %% --- Styling ---Notes
-
-        classDef service fill:#e1f5ff,stroke:#0066cc,stroke-width:2px;- Key files:
-
-        classDef conscious fill:#fff4e6,stroke:#ff9800,stroke-width:3px;    - `Services/PlanGenerator.cs` — plan candidate generation and hard pruning.
-
-        classDef data fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px;    - `Services/SimpleMcdmEngine.cs` — scoring (time, suitability, battery) and selection logic.
-
-            - `Services/LearningService.cs` — simple feedback loop that updates traffic costs via `PlanGenerator.UpdateTrafficCost`.
-
-        class B,D,F,H,I service;    - `Services/JulesMqttClient.cs` / `Services/DispatcherService.cs` — publish VDA 5050 orders to AMRs.
-
-        class WM,E conscious;    - `Services/InternalAmrController.cs` — translates VDA 5050 into internal AMR commands using `Models/InternalAmrCommand.cs`.
-
-        class DB data;
-
-```Keep the diagram and notes in sync with code: if you rename classes, update this file.
+- **ErpConnectorService** - Vertical plane: ERP integration (ISA-95)
+- **OptimizedPlanGenerator** - Subconscious layer: Fast pattern-based plan generation
+- **OptimizedMcdmEngine** - Conscious layer: Deliberate multi-criteria decision making
+- **CommunicationService** - Subconscious layer: Automated VDA 5050 + internal command execution
+- **LearningService** - Learning layer: Experience-based world model updates
+- **InternalAmrController** - Internal plane: AMR subsystem command translation
+- **WorkflowManager** - Central orchestrator of all cognitive and execution phases
 
 
 ## Architecture Overview

@@ -5,6 +5,7 @@ namespace FmsSimulator.Services;
 public sealed class OptimizedPlanGenerator : IFmsServices.IPlanGenerator
 {
     private readonly Dictionary<string, double> _zoneScores = new();
+    private readonly Dictionary<string, double> _humanTrafficCost = new(); // Kaizen learning: traffic model
     private readonly LoggingService _logger = LoggingService.Instance;
 
     public OperationResult<List<AssignmentPlan>> GeneratePlans(ProductionTask task, IEnumerable<AmrState> fleet)
@@ -68,7 +69,9 @@ public sealed class OptimizedPlanGenerator : IFmsServices.IPlanGenerator
         var currentTime = DateTime.UtcNow.TimeOfDay.TotalHours;
         var timeWeight = Math.Sin(currentTime * Math.PI / 12) * 0.2 + 0.8; // Time-of-day factor
         
-        var currentZoneScore = _zoneScores.GetValueOrDefault(currentZone, 1.0) * timeWeight;
+        // Apply learned traffic costs (Kaizen feedback)
+        var trafficCostFactor = _humanTrafficCost.GetValueOrDefault(currentZone, 1.0);
+        var currentZoneScore = _zoneScores.GetValueOrDefault(currentZone, 1.0) * timeWeight * trafficCostFactor;
         var targetZoneScore = _zoneScores.GetValueOrDefault(targetZone, 1.0) * timeWeight;
         
         // Calculate weighted zone score considering both source and destination
@@ -98,8 +101,24 @@ public sealed class OptimizedPlanGenerator : IFmsServices.IPlanGenerator
         _logger.LogPerformanceMetric("PlanGenerator", $"ZoneScore_{zone}", _zoneScores[zone]);
     }
 
+    /// <summary>
+    /// Kaizen learning: Update traffic cost based on observed delays
+    /// This is called by LearningService when actual performance deviates from predictions
+    /// </summary>
     public void UpdateTrafficCost(string zone, double increase)
     {
+        if (_humanTrafficCost.ContainsKey(zone))
+        {
+            _humanTrafficCost[zone] += increase;
+            Console.WriteLine($"[PlanGenerator] Updated traffic cost for {zone}: {_humanTrafficCost[zone]:F2} (increased by {increase:F2})");
+        }
+        else
+        {
+            _humanTrafficCost[zone] = 1.0 + increase;
+            Console.WriteLine($"[PlanGenerator] New traffic cost for {zone}: {_humanTrafficCost[zone]:F2}");
+        }
+        
+        // Also update the zone score system (unified approach)
         UpdateZoneScore(zone, increase);
     }
 }
