@@ -1,0 +1,35 @@
+# Docker Compose for MQTT Broker Testing
+# Phase 1: Communication Backbone Testing
+
+version: '3.8'
+
+services:
+  # Mosquitto MQTT Broker
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: fms-mqtt-broker
+    ports:
+      - "1883:1883"  # MQTT
+      - "9001:9001"  # WebSocket
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    restart: unless-stopped
+    networks:
+      - fms-network
+
+  # MQTT Explorer (Web UI for monitoring)
+  mqtt-explorer:
+    image: smeagolworms4/mqtt-explorer
+    container_name: fms-mqtt-explorer
+    ports:
+      - "4000:4000"
+    depends_on:
+      - mosquitto
+    networks:
+      - fms-network
+
+networks:
+  fms-network:
+    driver: bridge
