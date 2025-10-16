@@ -7,6 +7,16 @@ using Microsoft.Extensions.Options;
 using FmsSimulator.Services;
 using FmsSimulator.Models;
 
+// Check if running in test mode
+if (args.Length > 0 && args[0] == "--test-mqtt")
+{
+    // Run MQTT integration tests
+    await FmsSimulator.TestProgram.RunAsync(args.Skip(1).ToArray());
+    return;
+}
+
+// Continue with normal simulation mode
+
 var host = Host.CreateDefaultBuilder(args)
     .ConfigureServices((context, services) =>
     {
