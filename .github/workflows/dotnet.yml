@@ -16,9 +16,13 @@ jobs:
       uses: actions/setup-dotnet@v3
       with:
         dotnet-version: '9.0.x'
-    - name: Restore
-      run: dotnet restore
-    - name: Build
-      run: dotnet build --no-restore
+    - name: Restore dependencies
+      run: |
+        dotnet restore ./FmsSimulator/FmsSimulator.csproj
+        dotnet restore ./FmsSimulator.Tests/FmsSimulator.Tests.csproj
+    - name: Build main project
+      run: dotnet build ./FmsSimulator/FmsSimulator.csproj --no-restore --configuration Release
+    - name: Build test project
+      run: dotnet build ./FmsSimulator.Tests/FmsSimulator.Tests.csproj --no-restore --configuration Release
     - name: Run tests
-      run: dotnet test --no-build --verbosity normal
+      run: dotnet test ./FmsSimulator.Tests/FmsSimulator.Tests.csproj --no-build --configuration Release --verbosity normal
