@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace FmsSimulator.Services;
 
-public class LearningService : ILearningService
+public class LearningService : IFmsServices.ILearningService
 {
     private readonly ILogger<LearningService> _logger;
 
@@ -12,7 +12,7 @@ public class LearningService : ILearningService
         _logger = logger;
     }
     // This method represents the "Act" phase of the PDCA cycle.
-    public void UpdateWorldModel(AssignmentPlan completedPlan, double actualTimeToComplete, IPlanGenerator planGenerator)
+    public void UpdateWorldModel(AssignmentPlan completedPlan, double actualTimeToComplete, IFmsServices.IPlanGenerator planGenerator)
     {
         // "CHECK": Compare the prediction with the actual result.
         double error = actualTimeToComplete - completedPlan.PredictedTimeToComplete;

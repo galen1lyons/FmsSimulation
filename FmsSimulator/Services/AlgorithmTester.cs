@@ -5,11 +5,11 @@ namespace FmsSimulator.Services;
 
 public class AlgorithmTester
 {
-    private readonly IPlanGenerator _planGenerator;
-    private readonly IMcdmEngine _mcdmEngine;
+    private readonly IFmsServices.IPlanGenerator _planGenerator;
+    private readonly IFmsServices.IMcdmEngine _mcdmEngine;
     private readonly ILogger<AlgorithmTester> _logger;
 
-    public AlgorithmTester(IPlanGenerator planGenerator, IMcdmEngine mcdmEngine, ILogger<AlgorithmTester> logger)
+    public AlgorithmTester(IFmsServices.IPlanGenerator planGenerator, IFmsServices.IMcdmEngine mcdmEngine, ILogger<AlgorithmTester> logger)
     {
         _planGenerator = planGenerator;
         _mcdmEngine = mcdmEngine;
@@ -21,11 +21,18 @@ public class AlgorithmTester
         _logger.LogInformation("--- RUNNING TEST: {TestName} ---", testName);
 
         // 1. ACT: Run the core decision-making logic.
-        var possiblePlans = _planGenerator.GeneratePlans(task, fleet);
-        var bestPlan = _mcdmEngine.SelectBestPlan(possiblePlans);
+        var planResult = _planGenerator.GeneratePlans(task, fleet);
+        
+        if (planResult?.Data is not { } possiblePlans || !possiblePlans.Any())
+        {
+            _logger.LogWarning("RESULT: FAIL - No valid plans generated.");
+            return;
+        }
 
+        var decisionResult = _mcdmEngine.SelectBestPlan(possiblePlans);
+        
         // 2. ASSERT: Check if the result matches the expectation.
-        if (bestPlan == null)
+        if (decisionResult?.Data is not { } bestPlan)
         {
             _logger.LogWarning("RESULT: FAIL - The algorithm did not select any AMR.");
             return;

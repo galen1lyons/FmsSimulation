@@ -1,116 +1,146 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using FmsSimulator.Models;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using FmsSimulator.Services;
-
-// Master control: set to true to run the algorithm tester, false for full sim
-bool runTestMode = true;
+using FmsSimulator.Models;
 
 var host = Host.CreateDefaultBuilder(args)
-    .ConfigureServices(services =>
+    .ConfigureServices((context, services) =>
     {
-        // Register implementations for interfaces so the app can be resolved via DI
-        services.AddSingleton<IPlanGenerator, PlanGenerator>();
-        services.AddSingleton<IMcdmEngine, SimpleMcdmEngine>();
-        services.AddSingleton<IDispatcherService, DispatcherService>();
-        services.AddSingleton<IJulesMqttClient, JulesMqttClient>();
-        services.AddSingleton<ILearningService, LearningService>();
-        services.AddSingleton<ErpConnectorService>();
-        services.AddSingleton<AlgorithmTester>();
+        // Register core services
+        services.AddSingleton<LoggingService>();
+        services.AddSingleton<IFmsServices.IErpConnector, ErpConnectorService>();
+        services.AddSingleton<IFmsServices.IPlanGenerator, OptimizedPlanGenerator>();
+        services.AddSingleton<IFmsServices.IMcdmEngine, OptimizedMcdmEngine>();
+        services.AddSingleton<IFmsServices.ILearningService, LearningService>();
+        services.AddSingleton<IFmsServices.ICommunicationService>(sp => 
+            new CommunicationService("SYSTEM"));
+
+        // Validate FMS settings
+        services.AddOptions<FmsSettings>()
+            .Bind(context.Configuration.GetSection("FmsSettings"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+    })
+    .ConfigureLogging((context, logging) =>
+    {
+        logging.ClearProviders();
+        logging.AddConsole();
+        logging.AddDebug();
     })
     .Build();
 
-await host.StartAsync();
-
-using var scope = host.Services.CreateScope();
-var provider = scope.ServiceProvider;
-var logger = provider.GetRequiredService<ILogger<Program>>();
-
-if (runTestMode)
+async Task RunSimulationAsync(IServiceProvider services)
 {
-    var tester = provider.GetRequiredService<AlgorithmTester>();
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    var erpConnector = services.GetRequiredService<IFmsServices.IErpConnector>();
+    var planGenerator = services.GetRequiredService<IFmsServices.IPlanGenerator>();
+    var mcdmEngine = services.GetRequiredService<IFmsServices.IMcdmEngine>();
+    var communicationService = services.GetRequiredService<IFmsServices.ICommunicationService>();
+    var learningService = services.GetRequiredService<IFmsServices.ILearningService>();
 
-    // ARRANGE
-    var testFleet = new List<AmrState>
+    // Create a sample fleet of AMRs
+    var fleet = new List<AmrState>
     {
-        new() { Id = "Genesis-01", ModelName = "Genesis", PrimaryMission = "Pallet & Rack Transport", TopModuleType = "Electric AGV Lift", MaxPayloadKg = 1500, LiftingHeightMm = 510, IsAvailable = true, CurrentPosition = (10, 5), BatteryLevel = 0.15 },
-        new() { Id = "Leviticus-01", ModelName = "Leviticus", PrimaryMission = "Pallet & Rack Transport", TopModuleType = "Electric AGV Lift", MaxPayloadKg = 1500, LiftingHeightMm = 510, IsAvailable = true, CurrentPosition = (50, 75), BatteryLevel = 0.95 }
+        new() {
+            Id = "AMR-001",
+            ModelName = "HeavyLifter",
+            PrimaryMission = "Transport",
+            TopModuleType = "Electric AGV Lift",
+            MaxPayloadKg = 1500,
+            IsAvailable = true,
+            CurrentPosition = (1, 1),
+            BatteryLevel = 0.95,
+            LiftingHeightMm = 1000
+        },
+        new() {
+            Id = "AMR-002",
+            ModelName = "RoboArm",
+            PrimaryMission = "Pick",
+            TopModuleType = "6-Axis Robotic Arm",
+            MaxPayloadKg = 100,
+            IsAvailable = true,
+            CurrentPosition = (2, 3),
+            BatteryLevel = 0.75,
+            ArmReachMm = 1200
+        }
     };
 
-    var testTask = new ProductionTask
-    {
-        TaskId = "PRIORITY-LIFT",
-        RequiredPayload = 1000,
-        RequiredModule = "Electric AGV Lift"
-    };
+    logger.LogInformation("Starting FMS Simulation with {Count} AMRs in fleet", fleet.Count);
 
-    tester.RunTestScenario(
-        testName: "Should select farther AMR with higher battery",
-        fleet: testFleet,
-        task: testTask,
-        expectedWinnerId: "Leviticus-01"
-    );
-
-    logger.LogInformation("Algorithm test mode completed.");
-}
-else
-{
-    var planGenerator = provider.GetRequiredService<IPlanGenerator>();
-    var mcdmEngine = provider.GetRequiredService<IMcdmEngine>();
-    var dispatcher = provider.GetRequiredService<IDispatcherService>();
-    var learningService = provider.GetRequiredService<ILearningService>();
-    var erpConnector = provider.GetRequiredService<ErpConnectorService>();
-
-    logger.LogInformation("--- FMS Simulation Initialized (Full Architecture) ---");
-
-    var amrFleet = new List<AmrState>
-    {
-        new() { Id = "Genesis-01", ModelName = "Genesis", PrimaryMission = "Pallet & Rack Transport", TopModuleType = "Electric AGV Lift", MaxPayloadKg = 1500, LiftingHeightMm = 510, IsAvailable = true, CurrentPosition = (10, 5), BatteryLevel = 0.85 },
-        new() { Id = "Exodus-01", ModelName = "Exodus", PrimaryMission = "Mobile Picking", TopModuleType = "6-Axis Robotic Arm", MaxPayloadKg = 250, ArmReachMm = 1200, IsAvailable = true, CurrentPosition = (25, 30), BatteryLevel = 0.75 },
-        new() { Id = "Leviticus-01", ModelName = "Genesis", PrimaryMission = "Pallet & Rack Transport", TopModuleType = "Electric AGV Lift", MaxPayloadKg = 1500, LiftingHeightMm = 510, IsAvailable = true, CurrentPosition = (50, 75), BatteryLevel = 0.95 }
-    };
-
-    var amrControllers = amrFleet.ToDictionary(amr => amr.Id, amr => new AmrInternalController(amr.Id));
-
+    // Fetch tasks from ERP
     var taskQueue = erpConnector.FetchAndTranslateOrders();
+    logger.LogInformation("Received {Count} tasks from ERP", taskQueue.Count);
 
-    int taskNumber = 1;
+    // Initialize workflow manager
+    var workflowManager = new WorkflowManager(
+        erpConnector,
+        planGenerator,
+        mcdmEngine,
+        learningService,
+        communicationService);
+
+    // Process tasks concurrently with controlled parallelism
+    var maxConcurrentTasks = 3; // Adjust based on system capacity
+    var semaphore = new SemaphoreSlim(maxConcurrentTasks);
+    var tasks = new List<Task>();
+
+    logger.LogInformation("Starting task processing with max concurrency: {MaxTasks}", maxConcurrentTasks);
+
     while (taskQueue.Count > 0)
     {
+        await semaphore.WaitAsync();
         var currentTask = taskQueue.Dequeue();
-        logger.LogInformation("Processing Task #{TaskNumber}: {TaskId}", taskNumber, currentTask.TaskId);
-
-        var possiblePlans = planGenerator.GeneratePlans(currentTask, amrFleet);
-        var bestPlan = mcdmEngine.SelectBestPlan(possiblePlans);
-
-        if (bestPlan != null)
+        
+        var task = Task.Run(async () =>
         {
-            bestPlan.AssignedAmr.IsAvailable = false;
-
-            await dispatcher.DispatchOrderAsync(bestPlan);
-
-            var targetController = amrControllers[bestPlan.AssignedAmr.Id];
-            await targetController.ProcessVda5050Order(bestPlan.Task);
-
-            double actualTime = bestPlan.PredictedTimeToComplete + System.Random.Shared.Next(5, 10);
-            logger.LogInformation("[Feedback] Task complete. Predicted: {Predicted:F2}, Actual: {Actual:F2}", bestPlan.PredictedTimeToComplete, actualTime);
-            learningService.UpdateWorldModel(bestPlan, actualTime, planGenerator);
-        }
-        else
-        {
-            logger.LogWarning("No available AMR could be found for Task {TaskId}.", currentTask.TaskId);
-        }
-
-        taskNumber++;
+            try
+            {
+                await workflowManager.ExecuteWorkflowAsync(currentTask, fleet);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+        
+        tasks.Add(task);
     }
 
-    logger.LogInformation("All tasks processed. Simulation complete.");
+    // Wait for all tasks to complete
+    await Task.WhenAll(tasks);
+
+    // Generate final statistics
+    var completedWorkflows = tasks.Count;
+    var failedWorkflows = tasks.Count(t => t.IsFaulted);
+    
+    logger.LogInformation(
+        "Workflow execution completed. Total: {Total}, Succeeded: {Succeeded}, Failed: {Failed}",
+        completedWorkflows,
+        completedWorkflows - failedWorkflows,
+        failedWorkflows);
 }
 
-await host.StopAsync();
+try
+{
+    var logger = host.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("Starting FMS Simulation...");
 
+    // Register ErpConnectorService which was missing
+    var services = host.Services.GetRequiredService<IServiceScopeFactory>()
+        .CreateScope().ServiceProvider;
+
+    // Run the simulation
+    await RunSimulationAsync(services);
+
+    logger.LogInformation("Services initialized successfully. Press Ctrl+C to shut down.");
+    await host.RunAsync();
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"Critical error starting application: {ex.Message}");
+    throw;
+}
