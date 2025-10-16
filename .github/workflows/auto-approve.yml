@@ -1,0 +1,22 @@
+name: Auto Approve PRs
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  auto-approve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto approve
+        uses: hmarr/auto-approve-action@v4
+        # This will auto-approve PRs from dependabot or specific users
+        if: |
+          github.actor == 'dependabot[bot]' ||
+          github.actor == 'galen1lyons' ||
+          github.actor == 'dedmti.intern'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
